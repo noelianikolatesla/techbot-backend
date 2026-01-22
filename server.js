@@ -1,3 +1,6 @@
+//importar procuctus
+import { mockProducts } from "./mocks/products.js";
+
 // importamos express: framework para crear servidores web en Node.js
 import express from "express";
 
@@ -34,9 +37,8 @@ app.use(express.json());
 ========================= */
 // Creamos el cliente de Bedrock con la configuración necesaria
 const client = new BedrockRuntimeClient({
-  region: process.env.AWS_REGION,
-  // region: "us-east-1",
- // profile: "NoeliaAWS",
+  region: "us-east-1",
+  profile: "NoeliaAWS",
 });
 
 // --------- 🟢 NUEVO: MEMORIA GLOBAL ----------
@@ -50,18 +52,43 @@ let conversation = [
         text: `
 Eres TechBot, un asistente virtual de una tienda online de tecnología.
 
+DATOS DE CONTACTO (FICTICIOS Y PÚBLICOS):
+- Tienda: Tech-Learn Store
+- Email: contacto@techlearn-store.com
+- Teléfono: 900 123 456
+- Horario: Lunes a Viernes de 9:00 a 18:00
+- Ubicación: Madrid, España (dato ficticio)
+- Si te preguntan por datos legales o fiscales, indica que no están disponibles en esta versión.
+
+
 Normas obligatorias:
 - Respuestas medias (máx 15 líneas)
 - NO repetir preguntas ya respondidas
 - Mantén el contexto de la conversación
 - Si el usuario ya indicó el producto, NO cambies de tema
 - Habla como un vendedor, no como un manual técnico
+- Tech-Learn Store NO ofrece cursos ni formación 
+- Solo vende productos tecnológicos físicos
 - Siempre pregunta solo UNA cosa al final
 `,
       },
     ],
   },
 ];
+
+
+//fuuncio catalogo a texto
+function catalogToText(products) {
+  return products
+    .map((p) => `
+Producto: ${p.name}
+Categoría: ${p.category ?? "General"}
+Precio: ${p.price} €
+Descripción: ${p.description}
+`)
+    .join("\n");
+}
+
 
 /* =========================
    CHAT CON GUARDARRAÍLES
@@ -106,6 +133,39 @@ app.post("/chat", async (req, res) => {
     });
   }
 
+  // contacto
+  const isContactQuestion =
+  lowerMessage.includes("contacto") ||
+  lowerMessage.includes("contactar") ||
+  lowerMessage.includes("telefono") ||
+  lowerMessage.includes("email") ||
+  lowerMessage.includes("correo");
+
+if (isContactQuestion) {
+  return res.json({
+    answer:
+      "Puedes contactar con Tech-Learn Store en el email contacto@techlearn-store.com o llamando al 900 123 456, de lunes a viernes de 9:00 a 18:00. ¿Te ayudo con algún producto?",
+  });
+}
+
+  // ------ producto mas barato --------
+   // ⭐ PRODUCTO MÁS BARATO / ECONÓMICO (BACKEND)
+  const isCheapestQuestion =
+    lowerMessage.includes("mas barato") ||
+    lowerMessage.includes("más barato") ||
+    lowerMessage.includes("mas economico") ||
+    lowerMessage.includes("más económico");
+
+  if (isCheapestQuestion) {
+    const cheapest = [...mockProducts].sort(
+      (a, b) => a.price - b.price
+    )[0];
+
+    return res.json({
+      answer: `El producto más económico ahora mismo es ${cheapest.name} por ${cheapest.price} €. ¿Buscas algo parecido o de otra categoría?`,
+    });
+  }
+
   // 🟢 NUEVO: guardamos el mensaje del usuario
 conversation.push({
   role: "user",
@@ -114,6 +174,32 @@ conversation.push({
 
 
   try {
+
+    // ------- CATÁLOGO REAL ---------
+  // 🟢 CATÁLOGO REAL (SIEMPRE ANTES DE BEDROCK)
+    const catalogText = catalogToText(mockProducts);
+
+    conversation.push({
+      role: "user",
+      content: [
+        {
+          text: `
+CATÁLOGO REAL DE TECH-LEARN STORE
+--------------------------------
+${catalogText}
+
+INSTRUCCIONES:
+- Usa EXCLUSIVAMENTE este catálogo
+- NO inventes productos
+- NO inventes precios
+- Si un producto no existe, dilo claramente
+- Si el usuario pregunta por un producto que NO aparece en el catálogo, debes decir claramente que no lo vendemos
+- Puedes recomendar alternativas SOLO si están en este catálogo
+`,
+        },
+      ],
+    });
+
     // Configuramos/preparamos la entrada para invocar el modelo de Bedrock
     const input = {
       modelId: "amazon.nova-lite-v1:0",
@@ -173,11 +259,10 @@ conversation.push({
   content: [{ text: botAnswer }],
 });
 
-// 🟡 OPCIONAL PERO RECOMENDADO
-if (conversation.length > 12) {
-  // mantenemos el guardarraíl y los últimos mensajes
-  conversation.splice(1, 2);
+if (conversation.length > 14) {
+  conversation = [conversation[0], ...conversation.slice(-12)];
 }
+
 
 
 

@@ -38,7 +38,7 @@ app.use(express.json());
 // Creamos el cliente de Bedrock con la configuración necesaria
 const client = new BedrockRuntimeClient({
   region: "us-east-1",
-  profile: "NoeliaAWS",
+  //profile: "NoeliaAWS",
 });
 
 // --------- 🟢 NUEVO: MEMORIA GLOBAL ----------
